@@ -1,0 +1,186 @@
+---
+title: "Visualization and t test"
+author: "Takahito Oh"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# R Markdown: Visualization and T Test
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+plugin library
+
+```{r}
+library(readxl)
+library(SixSigma)
+library(tidyverse)
+library(ggalluvial)
+#library(ggthemr)
+library(ggthemes)
+```
+
+## CPK-presetting
+
+```{r}
+# Cpk
+# Set the total number of units 
+total_units <- 205
+```
+
+## Read File and view
+
+```{r}
+# cleaner
+rm(list = ls())
+# Suppose you have a string parameter for the file name
+filename <- "D:/R/Scooter-MBOM-cost-local/xslx-doing/GSXE2-000-BG"
+file_path_input <- paste0(filename, ".xlsx")
+# date name up here
+file_path_output <- paste0(filename, " 2024MAY.csv")
+
+header <- as.character(read_excel("D:/R/testings/Header.xlsx",col_names = FALSE))
+COSTDB <- read_excel(file_path_input)
+# sample <- read_excel("D:/R/testings/sample-tester.xlsx")
+# sample <- read_excel("D:/R/testings/sample-tester.xlsx",col_names = header)
+
+# View(MA4_Keyfeeling_03252021)
+# rm(SUMIF2)
+
+
+## Data processing
+
+
+###STANDARIZED
+##REMOVING TRASHES, COSTDB CAN BE CHANGED
+COSTDB2 <- drop_na(fill(drop_na(fill(fill(COSTDB, "Display Material Cost Estimate with Quantity Structure"), "...3"), "...3"), "...4"), "...14")
+
+## COSTDB2 <- drop_na(fill(drop_na(fill(fill(COSTDB, "Create Material Cost Estimate with Quantity Structure"), "...3"), "...3"), "...4"), "...14")
+
+# COSTDB2 standarized
+
+## CHECK LEVELS
+ISNA <- data.frame(which(is.na(COSTDB2[,4:8]), arr.ind=TRUE))
+# aggregate(col_to_sum ~ col_to_group_by, data=df, sum)
+SUMIF <- aggregate(col ~ row, data= ISNA, sum)
+
+
+x<- 0
+SUMIF2<- matrix(nrow = max(SUMIF$row), ncol = 1)
+ while (x < max(SUMIF$row)) { 
+    x <- x + 1 
+    if(SUMIF[x,2]<12){
+    SUMIF2[x,1] <-abs(SUMIF[x,2]+1-15)
+  }
+    else
+    {
+    SUMIF2[x,1] <-abs(SUMIF[x,2]-15)
+  }
+ } 
+# NOW SUMIF2 - PARTS LEVEL, NEED TO PUSH INTO RELATED COLUMNS
+
+
+## PUSH BACK IN COLUMN 1
+
+COSTBD3 <- bind_cols(SUMIF2, COSTDB2  )
+
+## Change header name
+# change column names of all the columns in the dataframe print(COSTBD3)
+colnames(COSTBD3) <- c("LVL","Costing Structure","Date","Model","L1", "L2","L3","L4","L5","Material","Material description" ,"Total value","Variable value","Fixed value","Price","Currency","Quantity","Costing Lot Size","Price unit","Unit of Measure","Price Strategy (Text)","Resource","Vendor","Vendor (Text)","Item Cat.","Item Category (Text)","reserved")
+
+# replace na to '0'
+COSTBD4 <- COSTBD3 %>% 
+    mutate_at(c(2,5:25), ~replace_na(.,"0"))
+
+
+
+## File Export
+
+
+
+
+
+# Export the data frame to a CSV file
+write_excel_csv(COSTBD4[1:26], file = file_path_output)
+cat("CSV file exported successfully")
+
+```
+
+
+## Theme
+
+```{r}
+ggthemr("flat dark")
+#theme_solarized theme_fivethirtyeight theme_hc theme_igray theme_pander theme_wsj
+```
+
+## Sorting
+
+```{r}
+
+
+PF.sub <- subset(MA4_Keyfeeling_208, (MA4_Keyfeeling_208$PFCL == "PF"))
+FRONTKEY.sub <- subset(MA4_Keyfeeling_03252021, (MA4_Keyfeeling_03252021$PFCL == "PF")& (MA4_Keyfeeling_03252021$KEY =="FL" | MA4_Keyfeeling_03252021$KEY =="FC" | MA4_Keyfeeling_03252021$KEY =="FR" ))
+SIDEKEY.sub <- subset(MA4_Keyfeeling_03252021, (MA4_Keyfeeling_03252021$PFCL == "PF")& (MA4_Keyfeeling_03252021$KEY =="VOLP" | MA4_Keyfeeling_03252021$KEY =="VOLM" | MA4_Keyfeeling_03252021$KEY =="POW"| MA4_Keyfeeling_03252021$KEY =="SCANL"| MA4_Keyfeeling_03252021$KEY =="SCANR" ))
+B.sub <- subset(MA4_Keyfeeling_208, (MA4_Keyfeeling_208$PFCL == "PF")&(MA4_Keyfeeling_208$RUBBER == "SILICONE" ))
+A.sub <- subset(MA4_Keyfeeling_208, (MA4_Keyfeeling_208$PFCL == "PF")&(MA4_Keyfeeling_208$RUBBER == "EPDM" ))
+
+```
+
+## Visualize
+
+```{r, echo=FALSE}
+ggplot(data = MA4_Keyfeeling_03252021)+geom_point(mapping=aes(x = KEY, y = Result, colour = PFCL))
+ggplot(data = MA4_Keyfeeling_208)+geom_violin(mapping=aes(x = KEY, y = Result, colour = PFCL))
+p <- ggplot(data = MA4_Keyfeeling_03252021, aes(x = KEY, y = Result, colour = PFCL)) 
+p + geom_violin()+ labs(title ="MA4-Keyfeeling-sampling") + theme_economist() 
+
+###
+
+ggplot(data = MA4_Keyfeeling_208, aes(x = KEY, y = ResultDiv, colour = RUBBER)) +geom_boxplot() + theme_bw() + labs(title = "MA4 #168 Keyfeeling Before/After change rubber to EPDM",caption = "ResultDiv = (PF-CL)/PF") 
+```
+
+## Sample Tests
+
+```{r}
+var.test(B.sub$Result, A.sub$Result, alternative="greater")
+t.test(B.sub$Result, A.sub$Result, alternative="less")
+t.test(B.sub$ResultDiv, A.sub$ResultDiv, alternative="greater")
+```
+
+## CpCpk
+
+```{r}
+# Get the Z (sigma score) of the process
+ss.ca.z(SIDEKEY.sub$Result, LSL = 50, USL = 150)
+ss.ca.z(FRONTKEY.sub$Result, LSL = 92, USL = 192)
+
+# Get the Cp indices of the process
+ss.ca.cp(MA4_Keyfeeling_03252021$Result, LSL = 50, USL = 150)
+
+# Get the Cp indices confidence intervals
+ss.ca.cp(measures, LSL = 740, USL = 760, ci = TRUE)
+
+# Get the Cpk indices of the process
+ss.ca.cpk(SIDEKEY.sub$Result, LSL = 50, USL = 150)
+
+# Get the Cpk indices confidence intervals
+ss.ca.cpk(measures, LSL = 740, USL = 760, ci = TRUE)
+
+# Perform process capability analysis
+ss.study.ca(SIDEKEY.sub$Result,
+            LSL = 150, 
+            USL = 50, 
+            Target = 100, 
+            alpha = 0.5, 
+            f.su = "")
+ss.study.ca(FRONTKEY.sub$Result,
+            LSL = 192, 
+            USL = 92, 
+            Target = 160, 
+            alpha = 0.5, 
+            f.su = "")
+```
